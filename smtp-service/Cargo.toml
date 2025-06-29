@@ -1,0 +1,40 @@
+[package]
+name = "fathom-loom-smtp-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+reqwest = { workspace = true }
+
+# Web server (for health checks and webhooks)
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
+
+# SMTP
+lettre = { version = "0.11", features = ["tokio1-rustls-tls", "smtp-transport", "builder"] }
+
+# Security
+ring = "0.17"
+base64 = "0.22"
+
+# Configuration
+dotenvy = "0.15"
+config = "0.14"
+
+# Validation
+validator = { version = "0.18", features = ["derive"] }
+
+# Queue/Job processing
+tokio-util = "0.7"
+tokio-cron-scheduler = "0.10"

@@ -1,0 +1,310 @@
+[
+  {
+    "id": "smtp_settings",
+    "name": "smtp_settings",
+    "type": "base",
+    "system": false,
+    "schema": [
+      {
+        "id": "host",
+        "name": "host",
+        "type": "text",
+        "system": false,
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 255,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "port",
+        "name": "port",
+        "type": "number",
+        "system": false,
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": 1,
+          "max": 65535,
+          "noDecimal": true
+        }
+      },
+      {
+        "id": "username",
+        "name": "username",
+        "type": "text",
+        "system": false,
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 255,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "password",
+        "name": "password",
+        "type": "text",
+        "system": false,
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 255,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "from_email",
+        "name": "from_email",
+        "type": "email",
+        "system": false,
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "exceptDomains": [],
+          "onlyDomains": []
+        }
+      },
+      {
+        "id": "from_name",
+        "name": "from_name",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 255,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "use_tls",
+        "name": "use_tls",
+        "type": "bool",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {}
+      },
+      {
+        "id": "use_ssl",
+        "name": "use_ssl",
+        "type": "bool",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {}
+      },
+      {
+        "id": "is_active",
+        "name": "is_active",
+        "type": "bool",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {}
+      },
+      {
+        "id": "test_connection_status",
+        "name": "test_connection_status",
+        "type": "select",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "maxSelect": 1,
+          "values": [
+            "pending",
+            "success",
+            "failed"
+          ]
+        }
+      },
+      {
+        "id": "test_connection_message",
+        "name": "test_connection_message",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 1000,
+          "pattern": ""
+        }
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_smtp_settings_is_active` ON `smtp_settings` (`is_active`)"
+    ],
+    "listRule": "@request.auth.id != \"\"",
+    "viewRule": "@request.auth.id != \"\"",
+    "createRule": "@request.auth.role = \"admin\"",
+    "updateRule": "@request.auth.role = \"admin\"",
+    "deleteRule": "@request.auth.role = \"admin\"",
+    "options": {}
+  },
+  {
+    "id": "email_queue",
+    "name": "email_queue",
+    "type": "base",
+    "system": false,
+    "schema": [
+      {
+        "id": "to_email",
+        "name": "to_email",
+        "type": "email",
+        "system": false,
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "exceptDomains": [],
+          "onlyDomains": []
+        }
+      },
+      {
+        "id": "to_name",
+        "name": "to_name",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 255,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "subject",
+        "name": "subject",
+        "type": "text",
+        "system": false,
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 500,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "body_html",
+        "name": "body_html",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": null,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "body_text",
+        "name": "body_text",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": null,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "status",
+        "name": "status",
+        "type": "select",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "maxSelect": 1,
+          "values": [
+            "pending",
+            "sending",
+            "sent",
+            "failed",
+            "retrying"
+          ]
+        }
+      },
+      {
+        "id": "retry_count",
+        "name": "retry_count",
+        "type": "number",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": 0,
+          "max": 10,
+          "noDecimal": true
+        }
+      },
+      {
+        "id": "error_message",
+        "name": "error_message",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 1000,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "scheduled_at",
+        "name": "scheduled_at",
+        "type": "date",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": "",
+          "max": ""
+        }
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_email_queue_status` ON `email_queue` (`status`)",
+      "CREATE INDEX `idx_email_queue_scheduled_at` ON `email_queue` (`scheduled_at`)"
+    ],
+    "listRule": "@request.auth.role = \"admin\"",
+    "viewRule": "@request.auth.role = \"admin\"",
+    "createRule": "@request.auth.id != \"\"",
+    "updateRule": "@request.auth.role = \"admin\"",
+    "deleteRule": "@request.auth.role = \"admin\"",
+    "options": {}
+  }
+]
