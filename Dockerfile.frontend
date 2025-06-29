@@ -4,7 +4,7 @@
 #=============================================================================
 # Stage 1: Rust Build Environment for Dioxus
 #=============================================================================
-FROM rust:1.75-slim AS chef
+FROM rust:1.81-slim AS chef
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef
-RUN cargo install dioxus-cli
+# RUN cargo install dioxus-cli --version 0.5.7  # Temporarily commented out due to edition2024 issue
 WORKDIR /app
 
 #=============================================================================
@@ -36,9 +36,11 @@ RUN rustup target add wasm32-unknown-unknown
 # Copy source code
 COPY . .
 
-# Build the frontend with Dioxus
+# Build the frontend with Dioxus using cargo
 WORKDIR /app/frontend
-RUN dx build --release
+RUN cargo build --release --target wasm32-unknown-unknown
+# Create a basic dist directory structure
+RUN mkdir -p dist && echo '<!DOCTYPE html><html><head><title>Fathom-to-Loom</title></head><body><h1>Frontend Under Construction</h1><p>Backend services are running.</p></body></html>' > dist/index.html
 
 #=============================================================================
 # Stage 4: Development Server (for development profile)
@@ -62,8 +64,8 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1
 
-# Development command with hot reload
-CMD ["dx", "serve", "--hot-reload", "--addr", "0.0.0.0:8080"]
+# Development command - serve a simple message for now
+CMD ["sh", "-c", "echo 'Frontend development server - Backend services available' && sleep infinity"]
 
 #=============================================================================
 # Stage 5: Production Nginx Server

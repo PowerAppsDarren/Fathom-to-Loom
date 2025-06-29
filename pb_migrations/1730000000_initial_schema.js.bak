@@ -401,10 +401,12 @@ migrate((db) => {
     "options": {}
   });
 
-  return Dao(db).saveCollection(userMetaCollection)
-    .then(() => Dao(db).saveCollection(apiKeysCollection))
-    .then(() => Dao(db).saveCollection(queueCollection))
-    .then(() => Dao(db).saveCollection(logsCollection));
+  const dao = new Dao(db);
+  
+  dao.saveCollection(userMetaCollection);
+  dao.saveCollection(apiKeysCollection);
+  dao.saveCollection(queueCollection);
+  dao.saveCollection(logsCollection);
 }, (db) => {
   // Rollback - delete all collections in reverse order
   const dao = new Dao(db);
