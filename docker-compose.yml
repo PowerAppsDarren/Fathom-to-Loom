@@ -9,7 +9,7 @@ services:
     ports:
       - "${PB_GLOBAL_PORT:-8090}:8090"
     volumes:
-      - pb_global_data:/pb_data
+      - global_pb_data:/pb_data
       - ./pb_migrations:/pb_migrations
     environment:
       - PB_ENCRYPTION_KEY=${PB_ENCRYPTION_KEY}
@@ -110,7 +110,7 @@ services:
       - production
 
 volumes:
-  pb_global_data:
+  global_pb_data:
     driver: local
   user_db_data:
     driver: local

@@ -1,0 +1,435 @@
+/// <reference path="../pb_data/types.d.ts" />
+migrate((db) => {
+  // Users collection is built-in PocketBase auth collection
+  // No need to create it, just verify it exists
+  
+  // Create user_meta collection for file paths and status flags
+  const userMetaCollection = new Collection({
+    "id": "user_meta_collection",
+    "created": "2024-01-01 00:00:00.000Z",
+    "updated": "2024-01-01 00:00:00.000Z",
+    "name": "user_meta",
+    "type": "base",
+    "system": false,
+    "schema": [
+      {
+        "system": false,
+        "id": "user_id",
+        "name": "user_id",
+        "type": "relation",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "collectionId": "_pb_users_auth_",
+          "cascadeDelete": true,
+          "minSelect": null,
+          "maxSelect": 1,
+          "displayFields": null
+        }
+      },
+      {
+        "system": false,
+        "id": "file_path",
+        "name": "file_path",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 500,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "active",
+        "name": "active",
+        "type": "bool",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {}
+      },
+      {
+        "system": false,
+        "id": "verified",
+        "name": "verified",
+        "type": "bool",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {}
+      },
+      {
+        "system": false,
+        "id": "premium",
+        "name": "premium",
+        "type": "bool",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {}
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_user_meta_user_id` ON `user_meta` (`user_id`)"
+    ],
+    "listRule": "@request.auth.id = user_id",
+    "viewRule": "@request.auth.id = user_id",
+    "createRule": "@request.auth.id != \"\"",
+    "updateRule": "@request.auth.id = user_id",
+    "deleteRule": "@request.auth.id = user_id",
+    "options": {}
+  });
+
+  // Create api_keys collection for encrypted API keys
+  const apiKeysCollection = new Collection({
+    "id": "api_keys_collection",
+    "created": "2024-01-01 00:00:00.000Z",
+    "updated": "2024-01-01 00:00:00.000Z",
+    "name": "api_keys",
+    "type": "base",
+    "system": false,
+    "schema": [
+      {
+        "system": false,
+        "id": "user_id",
+        "name": "user_id",
+        "type": "relation",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "collectionId": "_pb_users_auth_",
+          "cascadeDelete": true,
+          "minSelect": null,
+          "maxSelect": 1,
+          "displayFields": null
+        }
+      },
+      {
+        "system": false,
+        "id": "encrypted_fathom",
+        "name": "encrypted_fathom",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 1000,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "encrypted_loom",
+        "name": "encrypted_loom",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 1000,
+          "pattern": ""
+        }
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_api_keys_user_id` ON `api_keys` (`user_id`)"
+    ],
+    "listRule": "@request.auth.id = user_id",
+    "viewRule": "@request.auth.id = user_id",
+    "createRule": "@request.auth.id != \"\"",
+    "updateRule": "@request.auth.id = user_id",
+    "deleteRule": "@request.auth.id = user_id",
+    "options": {}
+  });
+
+  // Create queue collection for job queue management
+  const queueCollection = new Collection({
+    "id": "queue_collection",
+    "created": "2024-01-01 00:00:00.000Z",
+    "updated": "2024-01-01 00:00:00.000Z",
+    "name": "queue",
+    "type": "base",
+    "system": false,
+    "schema": [
+      {
+        "system": false,
+        "id": "user_id",
+        "name": "user_id",
+        "type": "relation",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "collectionId": "_pb_users_auth_",
+          "cascadeDelete": true,
+          "minSelect": null,
+          "maxSelect": 1,
+          "displayFields": null
+        }
+      },
+      {
+        "system": false,
+        "id": "meeting_id",
+        "name": "meeting_id",
+        "type": "text",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 100,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "status",
+        "name": "status",
+        "type": "select",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "maxSelect": 1,
+          "values": [
+            "pending",
+            "processing",
+            "completed",
+            "failed",
+            "cancelled"
+          ]
+        }
+      },
+      {
+        "system": false,
+        "id": "position",
+        "name": "position",
+        "type": "number",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": 0,
+          "max": null,
+          "noDecimal": true
+        }
+      },
+      {
+        "system": false,
+        "id": "queued_at",
+        "name": "queued_at",
+        "type": "date",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": "",
+          "max": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "started_at",
+        "name": "started_at",
+        "type": "date",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": "",
+          "max": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "completed_at",
+        "name": "completed_at",
+        "type": "date",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": "",
+          "max": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "error_message",
+        "name": "error_message",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 1000,
+          "pattern": ""
+        }
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_queue_status` ON `queue` (`status`)",
+      "CREATE INDEX `idx_queue_user_id` ON `queue` (`user_id`)",
+      "CREATE INDEX `idx_queue_position` ON `queue` (`position`)"
+    ],
+    "listRule": "@request.auth.id = user_id",
+    "viewRule": "@request.auth.id = user_id",
+    "createRule": "@request.auth.id != \"\"",
+    "updateRule": "@request.auth.id = user_id || @request.auth.collectionName = \"admin\"",
+    "deleteRule": "@request.auth.id = user_id || @request.auth.collectionName = \"admin\"",
+    "options": {}
+  });
+
+  // Create logs collection for application logging
+  const logsCollection = new Collection({
+    "id": "logs_collection",
+    "created": "2024-01-01 00:00:00.000Z",
+    "updated": "2024-01-01 00:00:00.000Z",
+    "name": "logs",
+    "type": "base",
+    "system": false,
+    "schema": [
+      {
+        "system": false,
+        "id": "level",
+        "name": "level",
+        "type": "select",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "maxSelect": 1,
+          "values": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "fatal"
+          ]
+        }
+      },
+      {
+        "system": false,
+        "id": "msg",
+        "name": "msg",
+        "type": "text",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 2000,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "ts",
+        "name": "ts",
+        "type": "date",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": "",
+          "max": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "user_id",
+        "name": "user_id",
+        "type": "relation",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "collectionId": "_pb_users_auth_",
+          "cascadeDelete": false,
+          "minSelect": null,
+          "maxSelect": 1,
+          "displayFields": null
+        }
+      },
+      {
+        "system": false,
+        "id": "component",
+        "name": "component",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 50,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "metadata",
+        "name": "metadata",
+        "type": "json",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "maxSize": 5000
+        }
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_logs_level` ON `logs` (`level`)",
+      "CREATE INDEX `idx_logs_ts` ON `logs` (`ts`)",
+      "CREATE INDEX `idx_logs_user_id` ON `logs` (`user_id`)",
+      "CREATE INDEX `idx_logs_component` ON `logs` (`component`)"
+    ],
+    "listRule": "@request.auth.collectionName = \"admin\"",
+    "viewRule": "@request.auth.collectionName = \"admin\" || (@request.auth.id != \"\" && user_id = @request.auth.id)",
+    "createRule": "@request.auth.id != \"\" || @request.auth.collectionName = \"admin\"",
+    "updateRule": "@request.auth.collectionName = \"admin\"",
+    "deleteRule": "@request.auth.collectionName = \"admin\"",
+    "options": {}
+  });
+
+  return Dao(db).saveCollection(userMetaCollection)
+    .then(() => Dao(db).saveCollection(apiKeysCollection))
+    .then(() => Dao(db).saveCollection(queueCollection))
+    .then(() => Dao(db).saveCollection(logsCollection));
+}, (db) => {
+  // Rollback - delete all collections in reverse order
+  const dao = new Dao(db);
+  
+  try {
+    dao.deleteCollection(dao.findCollectionByNameOrId("logs"));
+  } catch (e) {
+    // Collection might not exist
+  }
+  
+  try {
+    dao.deleteCollection(dao.findCollectionByNameOrId("queue"));
+  } catch (e) {
+    // Collection might not exist
+  }
+  
+  try {
+    dao.deleteCollection(dao.findCollectionByNameOrId("api_keys"));
+  } catch (e) {
+    // Collection might not exist
+  }
+  
+  try {
+    dao.deleteCollection(dao.findCollectionByNameOrId("user_meta"));
+  } catch (e) {
+    // Collection might not exist
+  }
+});

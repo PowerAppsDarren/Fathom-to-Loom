@@ -9,26 +9,39 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
+dioxus = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
 
-# Dioxus
-dioxus = "0.5"
+# Dioxus packages
 dioxus-web = "0.5"
 dioxus-router = "0.5"
+dioxus-liveview = "0.5"
 
-# HTTP client
-reqwest = { version = "0.11", features = ["json"] }
+# Web-specific HTTP client
 gloo-net = "0.5"
+gloo-timers = { version = "0.3", features = ["futures"] }
 
-# Utils
+# WASM utilities
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 js-sys = "0.3"
 gloo-utils = "0.2"
 gloo-storage = "0.3"
 
-# Validation
-validator = { version = "0.18", features = ["derive"] }
+# WebSocket support
+ws_stream_wasm = "0.7"
+futures = "0.3"
 
-# Logging
+# UI utilities
+validator = { version = "0.18", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde", "wasm-bindgen"] }
+regex = "1.0"
+
+# WASM-specific logging
 tracing-wasm = "0.2"
 console_error_panic_hook = "0.1"
+
+# Local workspace crates
+common = { path = "../common" }
