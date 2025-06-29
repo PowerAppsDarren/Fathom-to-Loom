@@ -140,8 +140,7 @@ pub fn Settings() -> Element {
                         h3 { class: "text-lg font-medium text-gray-900 mb-4", "Add New API Key" }
                     
                         form {
-                            onsubmit: move |evt| {
-                                evt.prevent_default();
+                            onsubmit: move |_evt| {
                                 let name = LocalStorage::get("new_api_key_name").unwrap_or_default();
                                 let value = LocalStorage::get("new_api_key_value").unwrap_or_default();
                                 save_api_key(name, value);

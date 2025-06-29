@@ -1,0 +1,78 @@
+# Multi-stage Dockerfile for Fathom-to-Loom Backend and Worker
+# This builds both the backend server and worker binaries
+
+#=============================================================================
+# Stage 1: Build Dependencies Cache
+#=============================================================================
+FROM rust:1.75-slim AS chef
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN cargo install cargo-chef
+WORKDIR /app
+
+#=============================================================================
+# Stage 2: Prepare Recipe
+#=============================================================================
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+#=============================================================================
+# Stage 3: Build Dependencies
+#=============================================================================
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+# Build dependencies - this is the caching Docker layer!
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# Copy source code
+COPY . .
+
+# Build all workspace binaries
+RUN cargo build --release --bin backend
+RUN cargo build --release --bin fathom_to_loom_worker
+
+#=============================================================================
+# Stage 4: Runtime Image
+#=============================================================================
+FROM debian:bookworm-slim AS runtime
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    wget \
+    curl \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user
+RUN useradd -r -s /bin/false -m -d /app fathom
+
+# Set up directories
+WORKDIR /app
+RUN mkdir -p /app/user_dbs /app/logs
+RUN chown -R fathom:fathom /app
+
+# Copy binaries
+COPY --from=builder /app/target/release/backend /app/backend
+COPY --from=builder /app/target/release/fathom_to_loom_worker /app/fathom_to_loom_worker
+
+# Make binaries executable
+RUN chmod +x /app/backend /app/fathom_to_loom_worker
+
+# Switch to app user
+USER fathom
+
+# Expose backend port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+# Default command (backend server)
+# Worker container will override this with: /app/fathom_to_loom_worker
+CMD ["/app/backend"]

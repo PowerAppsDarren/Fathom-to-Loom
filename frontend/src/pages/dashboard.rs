@@ -148,8 +148,8 @@ pub fn Dashboard() -> Element {
                     } else {
                         div { class: "space-y-4",
                             for (index, meeting) in queue_data.read().iter().enumerate() {
-                                div { class: "border border-gray-200 rounded-lg p-4",
-                                    div { class: "flex justify-between items-start",
+                                div { key: "{meeting.id}", class: "border border-gray-200 rounded-lg p-4",
+                                        div { class: "flex justify-between items-start",
                                         div { class: "flex-1",
                                             div { class: "flex items-center space-x-3",
                                                 div { class: "flex-shrink-0",

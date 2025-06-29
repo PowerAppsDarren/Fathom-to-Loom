@@ -61,9 +61,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pb_manager.start_health_monitoring().await;
     info!("PocketBase manager initialized with base path: {}", config.pocketbase.user_dbs_path);
 
-    // Initialize WebSocket manager
-    let ws_manager = Arc::new(WebSocketManager::new());
-    info!("WebSocket manager initialized");
+    // Initialize shared broadcast service
+    let broadcast_service = common::broadcast::BroadcastServiceFactory::create_shared(1000);
+    info!("Shared broadcast service initialized");
+    
+    // Initialize WebSocket manager with external broadcast integration
+    let ws_manager = Arc::new(WebSocketManager::with_external_broadcast(broadcast_service.clone()));
+    info!("WebSocket manager initialized with broadcast integration");
 
     // Initialize meeting queue
     let meetings_queue = Arc::new(RwLock::new(Vec::new()));

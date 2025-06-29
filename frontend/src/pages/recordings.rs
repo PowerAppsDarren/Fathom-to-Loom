@@ -216,7 +216,9 @@ pub fn Recordings() -> Element {
                                                     class: "bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors",
                                                     onclick: {
                                                         let meeting_clone = meeting.clone();
-                                                        move |_| add_to_queue(meeting_clone.clone())
+                                                        move |_| {
+                                                            add_to_queue(meeting_clone.clone());
+                                                        }
                                                     },
                                                     "Add to Queue"
                                                 }

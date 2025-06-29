@@ -1,7 +1,7 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        State, Query,
     },
     response::Response,
 };
@@ -21,6 +21,8 @@ use crate::api::queue::Meeting;
 pub struct QueueUpdate {
     pub update_type: QueueUpdateType,
     pub queue: Vec<Meeting>,
+    pub affected_user_id: Option<String>,
+    pub global_position: Option<usize>,
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
@@ -82,6 +84,40 @@ impl WebSocketManager {
             connections: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+    
+    /// Create WebSocket manager with external broadcast service integration
+    pub fn with_external_broadcast(external_broadcast: Arc<common::broadcast::BroadcastService>) -> Self {
+        let manager = Self::new();
+        
+        // Spawn task to forward external broadcasts to WebSocket clients
+        let queue_sender = manager.queue_sender.clone();
+        tokio::spawn(async move {
+            let mut rx = external_broadcast.subscribe();
+            while let Ok(update) = rx.recv().await {
+                // Convert external broadcast format to WebSocket format
+                let ws_update = QueueUpdate {
+                    update_type: match update.update_type {
+                        common::broadcast::QueueUpdateType::TaskStarted => QueueUpdateType::PositionUpdated,
+                        common::broadcast::QueueUpdateType::TaskCompleted => QueueUpdateType::MeetingRemoved,
+                        common::broadcast::QueueUpdateType::TaskFailed => QueueUpdateType::PositionUpdated,
+                        common::broadcast::QueueUpdateType::TaskRetried => QueueUpdateType::PositionUpdated,
+                        common::broadcast::QueueUpdateType::PositionUpdated => QueueUpdateType::PositionUpdated,
+                        common::broadcast::QueueUpdateType::QueueCleared => QueueUpdateType::QueueCleared,
+                    },
+                    queue: vec![], // Will be populated by the queue state
+                    affected_user_id: update.affected_user_id,
+                    global_position: update.global_position,
+                    timestamp: update.timestamp,
+                };
+                
+                if let Err(e) = queue_sender.send(ws_update) {
+                    error!("Failed to forward external broadcast to WebSocket clients: {}", e);
+                }
+            }
+        });
+        
+        manager
+    }
 
     /// Handle new WebSocket connection
     pub async fn handle_socket(
@@ -90,6 +126,7 @@ impl WebSocketManager {
         user_id: String,
     ) {
         let connection_id = Uuid::new_v4().to_string();
+        let user_id_clone = user_id.clone();
         
         // Register connection
         {
@@ -157,11 +194,25 @@ impl WebSocketManager {
                     queue_update = queue_rx.recv() => {
                         match queue_update {
                             Ok(update) => {
-                                let message = WebSocketMessage::QueueUpdate(update);
-                                if let Ok(json) = serde_json::to_string(&message) {
-                                    let mut sender_guard = sender_clone.lock().await;
-                                    if sender_guard.send(Message::Text(json)).await.is_err() {
-                                        break;
+                                // Filter updates by user_id and global position
+                                let should_send = match (&update.affected_user_id, &update.global_position) {
+                                    // If update has specific user_id, only send to that user or show global view
+                                    (Some(affected_user), _) => {
+                                        affected_user == &user_id_clone || user_id_clone == "admin" // Admin sees all
+                                    },
+                                    // If no specific user but has position info, send to all (global updates)
+                                    (None, Some(_)) => true,
+                                    // Send all other updates
+                                    (None, None) => true,
+                                };
+                                
+                                if should_send {
+                                    let message = WebSocketMessage::QueueUpdate(update);
+                                    if let Ok(json) = serde_json::to_string(&message) {
+                                        let mut sender_guard = sender_clone.lock().await;
+                                        if sender_guard.send(Message::Text(json)).await.is_err() {
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -227,13 +278,30 @@ impl WebSocketManager {
     }
 }
 
-/// WebSocket upgrade handler
+#[derive(Deserialize)]
+pub struct WebSocketQuery {
+    pub user_id: Option<String>,
+    pub token: Option<String>,
+}
+
+/// WebSocket upgrade handler with user authentication
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
-    State(ws_manager): State<Arc<WebSocketManager>>,
+    Query(params): Query<WebSocketQuery>,
+    State(app_state): State<crate::api::AppState>,
 ) -> Response {
-    // TODO: Extract user_id from authentication
-    let user_id = "anonymous".to_string(); // Placeholder
+    // Extract user_id from query params or authentication token
+    let user_id = match (params.user_id, params.token) {
+        (Some(uid), _) => uid,
+        (None, Some(token)) => {
+            // TODO: Validate token and extract user_id
+            // For now, use a placeholder
+            format!("user_from_token_{}", token.chars().take(8).collect::<String>())
+        },
+        (None, None) => "anonymous".to_string(),
+    };
+    
+    let ws_manager = app_state.ws_manager.clone();
     
     ws.on_upgrade(move |socket| async move {
         ws_manager.handle_socket(socket, user_id).await

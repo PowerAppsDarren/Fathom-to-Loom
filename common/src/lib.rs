@@ -7,6 +7,9 @@ use uuid::Uuid;
 /// Cryptographic utilities for secure storage
 pub mod crypto;
 
+/// Broadcasting services for real-time updates
+pub mod broadcast;
+
 /// Application-wide error type
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

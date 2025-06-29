@@ -42,9 +42,7 @@ pub fn Login() -> Element {
         navigator.push(Route::Dashboard {});
     }
 
-    let handle_submit = move |evt: FormEvent| {
-        evt.prevent_default();
-        
+    let handle_submit = move |_evt: FormEvent| {
         let form = form_data.read();
         
         // Validate form
@@ -168,9 +166,7 @@ pub fn Register() -> Element {
         navigator.push(Route::Dashboard {});
     }
 
-    let handle_submit = move |evt: FormEvent| {
-        evt.prevent_default();
-        
+    let handle_submit = move |_evt: FormEvent| {
         let form = form_data.read();
         
         // Validate form

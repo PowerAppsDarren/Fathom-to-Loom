@@ -5,7 +5,7 @@ use crate::services::auth::AuthService;
 
 #[component]
 pub fn Layout(children: Element) -> Element {
-    let auth_service = use_context::<Signal<AuthService>>();
+    let mut auth_service = use_context::<Signal<AuthService>>();
     let is_authenticated = auth_service.read().is_authenticated();
     
     rsx! {

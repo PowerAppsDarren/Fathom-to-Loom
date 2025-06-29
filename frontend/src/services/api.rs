@@ -73,7 +73,7 @@ impl ApiService {
         Ok(config.api.base_url.clone())
     }
 
-    fn create_authenticated_request(&self, method: &str, endpoint: &str) -> Result<Request> {
+    fn create_authenticated_request_builder(&self, method: &str, endpoint: &str) -> Result<gloo_net::http::RequestBuilder> {
         let base_url = self.get_base_url()?;
         let url = format!("{}/api{}", base_url, endpoint);
         
@@ -94,7 +94,9 @@ impl ApiService {
 
     // Queue management
     pub async fn get_queue(&self) -> Result<QueueResponse> {
-        let request = self.create_authenticated_request("GET", "/queue")?;
+        let request = self.create_authenticated_request_builder("GET", "/queue")?
+            .build()
+            .map_err(|e| anyhow!("Failed to build request: {}", e))?;
         let response = request.send().await
             .map_err(|e| anyhow!("Failed to get queue: {}", e))?;
 
@@ -107,9 +109,15 @@ impl ApiService {
     }
 
     pub async fn add_to_queue(&self, meeting_request: MeetingRequest) -> Result<QueueResponse> {
-        let request = self.create_authenticated_request("POST", "/queue")?
-            .json(&meeting_request)
+        let json_str = serde_json::to_string(&meeting_request)
             .map_err(|e| anyhow!("Failed to serialize meeting request: {}", e))?;
+            
+        let request = self.create_authenticated_request_builder("POST", "/queue")?
+            .header("Content-Type", "application/json")
+            .body(json_str);
+            
+        let request = request.build()
+            .map_err(|e| anyhow!("Failed to build request: {}", e))?;
 
         let response = request.send().await
             .map_err(|e| anyhow!("Failed to add to queue: {}", e))?;
@@ -124,7 +132,9 @@ impl ApiService {
 
     pub async fn remove_from_queue(&self, meeting_id: Uuid) -> Result<QueueResponse> {
         let endpoint = format!("/queue/{}", meeting_id);
-        let request = self.create_authenticated_request("DELETE", &endpoint)?;
+        let request = self.create_authenticated_request_builder("DELETE", &endpoint)?
+            .build()
+            .map_err(|e| anyhow!("Failed to build request: {}", e))?;
 
         let response = request.send().await
             .map_err(|e| anyhow!("Failed to remove from queue: {}", e))?;
@@ -154,7 +164,9 @@ impl ApiService {
             endpoint.push_str(&params.join("&"));
         }
 
-        let request = self.create_authenticated_request("GET", &endpoint)?;
+        let request = self.create_authenticated_request_builder("GET", &endpoint)?
+            .build()
+            .map_err(|e| anyhow!("Failed to build request: {}", e))?;
         let response = request.send().await
             .map_err(|e| anyhow!("Failed to get meetings: {}", e))?;
 
@@ -168,7 +180,9 @@ impl ApiService {
 
     // API Keys management
     pub async fn get_api_keys(&self) -> Result<Vec<ApiKey>> {
-        let request = self.create_authenticated_request("GET", "/keys")?;
+        let request = self.create_authenticated_request_builder("GET", "/keys")?
+            .build()
+            .map_err(|e| anyhow!("Failed to build request: {}", e))?;
         let response = request.send().await
             .map_err(|e| anyhow!("Failed to get API keys: {}", e))?;
 
@@ -181,9 +195,15 @@ impl ApiService {
     }
 
     pub async fn save_api_key(&self, api_key_request: ApiKeyRequest) -> Result<()> {
-        let request = self.create_authenticated_request("PUT", "/keys")?
-            .json(&api_key_request)
+        let json_str = serde_json::to_string(&api_key_request)
             .map_err(|e| anyhow!("Failed to serialize API key request: {}", e))?;
+            
+        let request = self.create_authenticated_request_builder("PUT", "/keys")?
+            .header("Content-Type", "application/json")
+            .body(json_str);
+            
+        let request = request.build()
+            .map_err(|e| anyhow!("Failed to build request: {}", e))?;
 
         let response = request.send().await
             .map_err(|e| anyhow!("Failed to save API key: {}", e))?;

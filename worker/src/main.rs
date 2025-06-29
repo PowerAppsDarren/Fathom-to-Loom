@@ -1,8 +1,11 @@
 mod config;
+mod queue;
 
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use common::broadcast::BroadcastServiceFactory;
+use std::sync::Arc;
 
 use config::WorkerConfig;
 
@@ -40,10 +43,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Poll interval: {}s", config.worker.poll_interval);
 
     info!("Starting Fathom to Loom worker");
+    
+    // Initialize shared broadcast service
+    let broadcast_service = BroadcastServiceFactory::create_shared(1000);
+    info!("Broadcast service initialized");
 
     // Main worker loop
     loop {
-        match process_tasks(&config).await {
+        match process_tasks(&config, broadcast_service.clone()).await {
             Ok(_) => {
                 info!("Worker cycle completed successfully");
             }
@@ -57,12 +64,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-async fn process_tasks(config: &WorkerConfig) -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: Implement actual task processing
+async fn process_tasks(
+    config: &WorkerConfig,
+    broadcast_service: Arc<common::broadcast::BroadcastService>
+) -> Result<(), Box<dyn std::error::Error>> {
     info!("Processing tasks with {} concurrency", config.worker.concurrency);
+    info!("Broadcast service subscribers: {}", broadcast_service.subscriber_count());
 
-    // Placeholder for actual work
-    sleep(Duration::from_secs(1)).await;
+    // TODO: Replace with actual user authentication/lookup
+    let dummy_user = common::User {
+        id: uuid::Uuid::new_v4(),
+        email: "worker@example.com".to_string(),
+        username: "worker".to_string(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+
+    // Process tasks with broadcasting
+    match queue::process_task(config, &dummy_user, broadcast_service).await {
+        Ok(_) => info!("Task processing completed"),
+        Err(e) => error!("Task processing failed: {}", e),
+    }
 
     Ok(())
 }

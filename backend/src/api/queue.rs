@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post, delete},
     Router,
 };
+use crate::api::websocket::{QueueUpdate, QueueUpdateType};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -60,12 +61,23 @@ pub async fn add_meetings(
         position,
     };
 
-    queue.push(meeting);
+    queue.push(meeting.clone());
+    let queue_clone = queue.clone();
+    drop(queue); // Release the write lock before broadcasting
+    
+    // Broadcast update to WebSocket clients
+    app_state.ws_manager.broadcast_queue_update(QueueUpdate {
+        update_type: QueueUpdateType::MeetingAdded,
+        queue: queue_clone.clone(),
+        affected_user_id: Some(meeting.user_id.clone()),
+        global_position: Some(meeting.position),
+        timestamp: chrono::Utc::now(),
+    }).await;
 
     Ok(Json(QueueResponse {
         success: true,
         message: "Meeting added to queue".into(),
-        data: Some(queue.clone()),
+        data: Some(queue_clone),
     }))
 }
 
@@ -90,21 +102,36 @@ pub async fn remove_meeting(
     let queue = &app_state.meetings_queue;
     let mut queue = queue.write().await;
     if let Some(pos) = queue.iter().position(|m| m.id == id) {
-        queue.remove(pos);
+        let removed_meeting = queue.remove(pos);
         for (i, meeting) in queue.iter_mut().enumerate() {
             meeting.position = i + 1;
         }
+        
+        let queue_clone = queue.clone();
+        drop(queue); // Release the write lock before broadcasting
+        
+        // Broadcast update to WebSocket clients
+        app_state.ws_manager.broadcast_queue_update(QueueUpdate {
+            update_type: QueueUpdateType::MeetingRemoved,
+            queue: queue_clone.clone(),
+            affected_user_id: Some(removed_meeting.user_id.clone()),
+            global_position: Some(pos + 1), // Previous position
+            timestamp: chrono::Utc::now(),
+        }).await;
 
         Ok(Json(QueueResponse {
             success: true,
             message: "Meeting removed from queue".into(),
-            data: Some(queue.clone()),
+            data: Some(queue_clone),
         }))
     } else {
+        let queue_clone = queue.clone();
+        drop(queue);
+        
         Ok(Json(QueueResponse {
             success: false,
             message: "Meeting not found".into(),
-            data: Some(queue.clone()),
+            data: Some(queue_clone),
         }))
     }
 }

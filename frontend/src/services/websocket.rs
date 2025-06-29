@@ -66,19 +66,16 @@ impl WebSocketService {
             
             while let Some(msg) = stream.next().await {
                 match msg {
-                    Ok(WsMessage::Text(text)) => {
+                    WsMessage::Text(text) => {
                         if let Ok(ws_msg) = serde_json::from_str::<WebSocketMessage>(&text) {
                             tracing::info!("Received WebSocket message: {:?}", ws_msg);
                             // TODO: Send message to subscribers
                         }
                     }
-                    Ok(WsMessage::Binary(_)) => {
+                    WsMessage::Binary(_) => {
                         tracing::warn!("Received unexpected binary WebSocket message");
                     }
-                    Err(e) => {
-                        tracing::error!("WebSocket error: {:?}", e);
-                        break;
-                    }
+                    // Note: WsMessage doesn't have Error variant, errors come from stream.next()
                 }
             }
             

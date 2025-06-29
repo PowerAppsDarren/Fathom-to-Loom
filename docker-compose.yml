@@ -14,22 +14,26 @@ services:
     environment:
       - PB_ENCRYPTION_KEY=${PB_ENCRYPTION_KEY}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8090/api/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
     networks:
       - fathom_network
 
-  # Backend service
+  # Backend service (Rust binary)
   backend:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile.backend
+      target: runtime
     container_name: fathom_backend
     restart: unless-stopped
     ports:
       - "${BACKEND_PORT:-3000}:3000"
+    env_file:
+      - .env
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - DATABASE_URL=http://pb_global:8090
@@ -39,22 +43,34 @@ services:
       - USER_DB_BASE_PATH=${USER_DB_BASE_PATH:-/app/user_dbs}
       - PB_ADMIN_EMAIL=${PB_ADMIN_EMAIL}
       - PB_ADMIN_PASSWORD=${PB_ADMIN_PASSWORD}
+      - PB_ENCRYPTION_KEY=${PB_ENCRYPTION_KEY}
     volumes:
       - user_db_data:/app/user_dbs
       - ./logs:/app/logs
+      # Optional: bind mount for development hot reload
+      # - ./backend/src:/app/backend/src:ro
     depends_on:
       pb_global:
         condition: service_healthy
     networks:
       - fathom_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
-  # Worker service
+  # Worker service (same image as backend but runs fathom_to_loom_worker)
   worker:
     build:
       context: .
-      dockerfile: worker/Dockerfile
+      dockerfile: Dockerfile.backend
+      target: runtime
     container_name: fathom_worker
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - DATABASE_URL=http://pb_global:8090
@@ -62,32 +78,68 @@ services:
       - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-1}
       - QUEUE_POLL_INTERVAL=${QUEUE_POLL_INTERVAL:-5}
       - USER_DB_BASE_PATH=${USER_DB_BASE_PATH:-/app/user_dbs}
+      - PB_ENCRYPTION_KEY=${PB_ENCRYPTION_KEY}
     volumes:
       - user_db_data:/app/user_dbs
       - ./logs:/app/logs
+    command: ["/app/fathom_to_loom_worker"]
     depends_on:
       pb_global:
         condition: service_healthy
       backend:
-        condition: service_started
+        condition: service_healthy
     networks:
       - fathom_network
 
-  # Frontend service (for development)
+  # Frontend service (Nginx serving dist/ from Dioxus build)
   frontend:
     build:
       context: .
-      dockerfile: frontend/Dockerfile
+      dockerfile: Dockerfile.frontend
+      target: runtime
     container_name: fathom_frontend
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-8080}:8080"
+      - "${FRONTEND_PORT:-8080}:80"
+    env_file:
+      - .env
     environment:
       - API_BASE_URL=${API_BASE_URL:-http://backend:3000}
     depends_on:
       - backend
     networks:
       - fathom_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Development frontend service with hot reload (alternative to production frontend)
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: dev
+    container_name: fathom_frontend_dev
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      - API_BASE_URL=${API_BASE_URL:-http://backend:3000}
+    volumes:
+      # Bind mount for hot reload in development
+      - ./frontend/src:/app/frontend/src
+      - ./frontend/assets:/app/frontend/assets
+      - ./frontend/Dioxus.toml:/app/frontend/Dioxus.toml
+    depends_on:
+      - backend
+    networks:
+      - fathom_network
+    profiles:
+      - dev
 
   # Nginx reverse proxy (production)
   nginx:
@@ -98,23 +150,63 @@ services:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
       - ./logs/nginx:/var/log/nginx
+      # Optional: serve static files directly from nginx
+      - frontend_dist:/var/www/html:ro
     depends_on:
       - backend
       - frontend
+      - pb_global
+    networks:
+      - fathom_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - production
+
+  # Optional: Process supervisor for per-user PBs (watch script alternative)
+  pb-supervisor:
+    build:
+      context: .
+      dockerfile: Dockerfile.supervisor
+    container_name: fathom_pb_supervisor
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - DATABASE_URL=http://pb_global:8090
+      - AES_MASTER_KEY=${AES_MASTER_KEY}
+      - USER_DB_BASE_PATH=${USER_DB_BASE_PATH:-/app/user_dbs}
+      - PB_ENCRYPTION_KEY=${PB_ENCRYPTION_KEY}
+    volumes:
+      - user_db_data:/app/user_dbs
+      - ./logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock  # For spawning per-user PB containers
+    depends_on:
+      pb_global:
+        condition: service_healthy
     networks:
       - fathom_network
     profiles:
-      - production
+      - supervisor
 
 volumes:
   global_pb_data:
     driver: local
   user_db_data:
     driver: local
+  frontend_dist:
+    driver: local
 
 networks:
   fathom_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
