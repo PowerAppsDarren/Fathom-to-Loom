@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # Global PocketBase instance
+  pb_global:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: fathom_pb_global
+    restart: unless-stopped
+    ports:
+      - "${PB_GLOBAL_PORT:-8090}:8090"
+    volumes:
+      - pb_global_data:/pb_data
+      - ./pb_migrations:/pb_migrations
+    environment:
+      - PB_ENCRYPTION_KEY=${PB_ENCRYPTION_KEY}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - fathom_network
+
+  # Backend service
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: fathom_backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - DATABASE_URL=http://pb_global:8090
+      - AES_MASTER_KEY=${AES_MASTER_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080}
+      - USER_DB_BASE_PATH=${USER_DB_BASE_PATH:-/app/user_dbs}
+      - PB_ADMIN_EMAIL=${PB_ADMIN_EMAIL}
+      - PB_ADMIN_PASSWORD=${PB_ADMIN_PASSWORD}
+    volumes:
+      - user_db_data:/app/user_dbs
+      - ./logs:/app/logs
+    depends_on:
+      pb_global:
+        condition: service_healthy
+    networks:
+      - fathom_network
+
+  # Worker service
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: fathom_worker
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - DATABASE_URL=http://pb_global:8090
+      - AES_MASTER_KEY=${AES_MASTER_KEY}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-1}
+      - QUEUE_POLL_INTERVAL=${QUEUE_POLL_INTERVAL:-5}
+      - USER_DB_BASE_PATH=${USER_DB_BASE_PATH:-/app/user_dbs}
+    volumes:
+      - user_db_data:/app/user_dbs
+      - ./logs:/app/logs
+    depends_on:
+      pb_global:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - fathom_network
+
+  # Frontend service (for development)
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: fathom_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    environment:
+      - API_BASE_URL=${API_BASE_URL:-http://backend:3000}
+    depends_on:
+      - backend
+    networks:
+      - fathom_network
+
+  # Nginx reverse proxy (production)
+  nginx:
+    image: nginx:alpine
+    container_name: fathom_nginx
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - fathom_network
+    profiles:
+      - production
+
+volumes:
+  pb_global_data:
+    driver: local
+  user_db_data:
+    driver: local
+
+networks:
+  fathom_network:
+    driver: bridge
